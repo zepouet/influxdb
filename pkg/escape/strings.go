@@ -9,33 +9,17 @@ var (
 		' ': []byte(`\ `),
 		'=': []byte(`\=`),
 	}
-
-	codesStr = map[string]string{}
-
-	// escaper   = strings.NewReplacer(`,`, `\,`, `"`, `\"`, ` `, `\ `, `=`, `\=`)
-	// unescaper = strings.NewReplacer(`\,`, `,`, `\"`, `"`, `\ `, ` `, `\=`, `=`)
+	escaper   = strings.NewReplacer(`,`, `\,`, `"`, `\"`, ` `, `\ `, `=`, `\=`)
+	unescaper = strings.NewReplacer(`\,`, `,`, `\"`, `"`, `\ `, ` `, `\=`, `=`)
 )
-
-func init() {
-	for k, v := range Codes {
-		codesStr[string(k)] = string(v)
-	}
-}
 
 func UnescapeString(in string) string {
 	if strings.IndexByte(in, '\\') == -1 {
 		return in
 	}
-
-	for b, esc := range codesStr {
-		in = strings.Replace(in, esc, b, -1)
-	}
-	return in
+	return unescaper.Replace(in)
 }
 
 func String(in string) string {
-	for b, esc := range codesStr {
-		in = strings.Replace(in, b, esc, -1)
-	}
-	return in
+	return escaper.Replace(in)
 }
