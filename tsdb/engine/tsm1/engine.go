@@ -1223,7 +1223,7 @@ func (e *Engine) KeyCursor(key string, t int64, ascending bool) *KeyCursor {
 	return e.FileStore.KeyCursor(key, t, ascending)
 }
 
-func (e *Engine) CreateIterator(opt influxql.IteratorOptions) (influxql.Iterator, error) {
+func (e *Engine) CreateIterator(measurement string, opt influxql.IteratorOptions) (influxql.Iterator, error) {
 	if call, ok := opt.Expr.(*influxql.Call); ok {
 		refOpt := opt
 		refOpt.Expr = call.Args[0].(*influxql.VarRef)
@@ -1242,7 +1242,7 @@ func (e *Engine) CreateIterator(opt influxql.IteratorOptions) (influxql.Iterator
 			}
 		}
 
-		inputs, err := e.createVarRefIterator(refOpt, aggregate)
+		inputs, err := e.createVarRefIterator(measurement, refOpt, aggregate)
 		if err != nil {
 			return nil, err
 		} else if len(inputs) == 0 {
@@ -1265,7 +1265,7 @@ func (e *Engine) CreateIterator(opt influxql.IteratorOptions) (influxql.Iterator
 		return influxql.NewParallelMergeIterator(inputs, opt, runtime.GOMAXPROCS(0)), nil
 	}
 
-	itrs, err := e.createVarRefIterator(opt, false)
+	itrs, err := e.createVarRefIterator(measurement, opt, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1280,34 +1280,35 @@ func (e *Engine) CreateIterator(opt influxql.IteratorOptions) (influxql.Iterator
 // createVarRefIterator creates an iterator for a variable reference.
 // The aggregate argument determines this is being created for an aggregate.
 // If this is an aggregate, the limit optimization is disabled temporarily. See #6661.
-func (e *Engine) createVarRefIterator(opt influxql.IteratorOptions, aggregate bool) ([]influxql.Iterator, error) {
+func (e *Engine) createVarRefIterator(measurement string, opt influxql.IteratorOptions, aggregate bool) ([]influxql.Iterator, error) {
 	ref, _ := opt.Expr.(*influxql.VarRef)
 
 	var itrs []influxql.Iterator
 	if err := func() error {
-		mms := tsdb.Measurements(e.index.MeasurementsByName(influxql.Sources(opt.Sources).Names()))
+		mm := e.index.Measurement(measurement)
+		if mm == nil {
+			return nil
+		}
 
-		for _, mm := range mms {
-			// Determine tagsets for this measurement based on dimensions and filters.
-			tagSets, err := mm.TagSets(e.id, opt.Dimensions, opt.Condition)
+		// Determine tagsets for this measurement based on dimensions and filters.
+		tagSets, err := mm.TagSets(e.id, opt.Dimensions, opt.Condition)
+		if err != nil {
+			return err
+		}
+
+		// Calculate tag sets and apply SLIMIT/SOFFSET.
+		tagSets = influxql.LimitTagSets(tagSets, opt.SLimit, opt.SOffset)
+
+		for _, t := range tagSets {
+			inputs, err := e.createTagSetIterators(ref, mm, t, opt)
 			if err != nil {
 				return err
 			}
 
-			// Calculate tag sets and apply SLIMIT/SOFFSET.
-			tagSets = influxql.LimitTagSets(tagSets, opt.SLimit, opt.SOffset)
-
-			for _, t := range tagSets {
-				inputs, err := e.createTagSetIterators(ref, mm, t, opt)
-				if err != nil {
-					return err
-				}
-
-				if !aggregate && len(inputs) > 0 && (opt.Limit > 0 || opt.Offset > 0) {
-					itrs = append(itrs, newLimitIterator(influxql.NewSortedMergeIterator(inputs, opt), opt))
-				} else {
-					itrs = append(itrs, inputs...)
-				}
+			if !aggregate && len(inputs) > 0 && (opt.Limit > 0 || opt.Offset > 0) {
+				itrs = append(itrs, newLimitIterator(influxql.NewSortedMergeIterator(inputs, opt), opt))
+			} else {
+				itrs = append(itrs, inputs...)
 			}
 		}
 		return nil

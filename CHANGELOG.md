@@ -6,6 +6,7 @@
 
 - [#7066](https://github.com/influxdata/influxdb/issues/7066): Add support for secure transmission via collectd.
 - [#7554](https://github.com/influxdata/influxdb/pull/7554): update latest dependencies with Godeps.
+- [#4619](https://github.com/influxdata/influxdb/issues/4619): Support subquery execution in the query language.
 
 ### Bugfixes
 
