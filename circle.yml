@@ -22,6 +22,7 @@ test:
     override:
         - bash circle-test.sh:
             parallel: true
+            timeout: 1200
 
 deployment:
   release:

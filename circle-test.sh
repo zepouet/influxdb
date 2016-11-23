@@ -9,7 +9,7 @@ set -e
 DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 cd $DIR
 
-export OUTPUT_DIR="$CIRCLE_ARTIFACTS" 
+export OUTPUT_DIR="$CIRCLE_ARTIFACTS"
 # Don't delete the container since CircleCI doesn't have permission to do so.
 export DOCKER_RM="false"
 
